@@ -1,0 +1,1 @@
+Add your real Splunk screenshots here. Use the exact filenames listed in README.md. Do not include passwords, tokens, or unrelated personal information.
