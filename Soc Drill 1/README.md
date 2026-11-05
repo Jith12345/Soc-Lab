@@ -195,21 +195,5 @@ No containment or remediation action is claimed in this project.
 ## Skills demonstrated
 Splunk SPL, Windows authentication event review, basic endpoint process review, evidence documentation, timeline creation, MITRE ATT&CK mapping, L1 triage, and escalation writing.
 
-## Screenshot checklist
-Save genuine Splunk screenshots in `screenshots/` with these exact names:
-1. `01-failed-logons-by-source.png`
-2. `02-failed-logon-details.png`
-3. `03-successful-rdp-logon.png`
-4. `04-endpoint-process-review.png`
-5. `05-upd-exe-search.png`
 
-Crop screenshots so the SPL and relevant result rows are readable. Hide unrelated personal information, tokens, and account details.
 
-## Publish to GitHub
-1. Create a public repository named `soc-l1-brute-force-investigation`.
-2. Upload this folder and its contents.
-3. Add your screenshots to `screenshots/` using the exact filenames above.
-4. Confirm the images render in the README.
-5. Add the repository URL to your resume or portfolio.
-
-**Portfolio integrity:** Present this as a hands-on lab investigation. Do not describe the IP as a real attacker, claim a confirmed breach, or claim to have completed L2 investigation.
