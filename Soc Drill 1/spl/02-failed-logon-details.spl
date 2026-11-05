@@ -1,0 +1,2 @@
+index=main EventCode=4625 src_ip="198.51.100.77"
+| table _time host user target_user src_ip EventCode
