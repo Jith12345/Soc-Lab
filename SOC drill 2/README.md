@@ -1,120 +1,277 @@
-# SOC L1 Investigation: Suspicious PowerShell Launched by Microsoft Word
+# SOC L1 Investigation – Suspicious PowerShell Launched by Microsoft Word
 
-A beginner-friendly Security Operations Center (SOC) Level 1 investigation using Splunk and simulated endpoint/proxy logs.
+**Project Type:** Simulated SOC Lab Investigation  
+**SIEM Tool:** Splunk Enterprise  
+**Role:** SOC Analyst – Level 1 (L1)  
+**Alert Severity:** High (lab-provided severity)  
+**Investigation Date:** 24 October 2026  
+**Investigation Status:** Suspicious activity identified – escalated for L2 validation
 
-## Project overview
+---
 
-This project documents an L1 investigation of an alert in which Microsoft Word (`winword.exe`) launched PowerShell (`powershell.exe`). The investigation follows a practical SOC workflow:
+## 1. Project Overview
 
-1. Identify the affected host, user, and process relationship.
-2. Review the PowerShell command line and decode the Base64 command.
-3. Correlate endpoint activity with proxy logs.
-4. Identify repeated outbound HTTP requests.
-5. Calculate request intervals to assess possible beaconing.
-6. Document findings and recommend escalation to L2.
+This project demonstrates a Security Operations Center (SOC) Level 1 investigation using Splunk.
 
-> **Lab disclaimer:** This is a training/portfolio investigation using simulated lab data. The findings are indicators of suspicious activity, not proof of a real compromise, malware infection, data theft, or confirmed command-and-control.
+The investigation started with an alert indicating that Microsoft Word (`winword.exe`) launched PowerShell (`powershell.exe`).
 
-## Alert details
+The objective was to investigate the process relationship, inspect the PowerShell command, correlate proxy activity, identify repeated external network requests, and document the findings for escalation.
+
+The investigation uses simulated endpoint and proxy log datasets.
+
+## 2. Investigation Objectives
+
+- Identify the affected host and user.
+- Identify the parent and child processes.
+- Retrieve and inspect the complete PowerShell command line.
+- Decode the Base64-encoded PowerShell command.
+- Investigate proxy activity before PowerShell execution.
+- Identify network communication after PowerShell execution.
+- Calculate the interval between repeated network requests.
+- Map observed behavior to relevant MITRE ATT&CK techniques.
+- Prepare an L1 investigation report and escalation recommendation.
+
+## 3. Lab Environment
+
+| Component | Details |
+|---|---|
+| SIEM | Splunk Enterprise |
+| Index | `main` |
+| Endpoint dataset | `endpoint.csv` |
+| Proxy dataset | Proxy log CSV |
+| Firewall dataset | `firewall.csv` |
+| Authentication dataset | Windows authentication logs |
+| Investigation date | 24 October 2026 |
+
+All available datasets were uploaded to Splunk under `index=main`.
+
+## 4. Alert Details
 
 | Field | Value |
 |---|---|
 | Alert | PowerShell launched by Microsoft Office |
-| Severity | High (as supplied by the lab alert) |
-| Host | `WS-ACC07` |
+| Severity | High |
+| Event time | 09:15:40 |
 | User | `ravi.k` |
-| Source IP | `10.10.3.17` |
-| PowerShell event | `2026-10-24 09:15:40` |
 | Parent process | `winword.exe` |
 | Child process | `powershell.exe` |
+| Host | See host-validation note in the investigation report |
+| Source IP in proxy logs | `10.10.3.17` |
 
-## Key findings
+## 5. Executive Summary
 
-- Microsoft Word launched PowerShell at `09:15:40`.
-- The command line included `-nop`, `-w hidden`, and `-enc`.
-- The Base64 command decoded to `Write-Output 'lab-stage1-beacon'`.
-- A request for `http://invoice-portal-secure.example/Invoice_8821.zip` was observed at `09:14:22`, shortly before the process event.
-- Proxy logs showed repeated HTTP POST requests to `http://update-check.example/beacon`.
-- Requests were recorded once per minute from `09:16:00` through `09:35:00`, with `312` bytes recorded for each request.
-- The regular timing is consistent with beacon-like activity, but does not independently prove C2.
+The endpoint logs recorded Microsoft Word launching PowerShell under user `ravi.k` at 09:15:40 on 24 October 2026.
 
-## Timeline
+The raw process event contained the following command:
 
-| Timestamp (2026-10-24) | Event |
-|---|---|
-| 09:14:22 | GET request to `invoice-portal-secure.example/Invoice_8821.zip` |
-| 09:15:40 | `winword.exe` launches `powershell.exe` on `WS-ACC07` |
-| 09:16:00 | First observed POST to `update-check.example/beacon` |
-| 09:17:00–09:35:00 | Repeated POST requests at 60-second intervals |
-
-## Repository structure
-
-```text
-SOC-L1-Splunk-Suspicious-PowerShell-Investigation/
-├── README.md
-├── spl/
-│   └── ticket-02-investigation.spl
-├── reports/
-│   └── ticket-02-l1-investigation-report.md
-├── evidence/
-│   └── evidence-summary.md
-└── screenshots/
-    └── README.md
+```powershell
+powershell.exe -nop -w hidden -enc VwByAGkAdABlAC0ATwB1AHQAcAB1AHQAIAAnAGwAYQBiAC0AcwB0AGEAZwBlADEALQBiAGUAYwBvAG4AJwA=
 ```
 
-## How to reproduce in Splunk
+The encoded command decoded to:
 
-1. Import the lab CSV files into Splunk (the lab used `index=main`).
-2. Set the time picker to include **24 October 2026, 09:00–09:36**.
-3. Open `spl/ticket-02-investigation.spl`.
-4. Run each search separately, in order.
-5. Save screenshots using the names listed in `screenshots/README.md`.
+```powershell
+Write-Output 'lab-stage1-beacon'
+```
 
-The SPL assumes the fields shown in the lab are available. If your field names differ, adjust them to match your data.
+Proxy logs recorded a GET request to:
 
-## MITRE ATT&CK mapping (tentative)
+`http://invoice-portal-secure.example/Invoice_8821.zip`
 
-| Technique | Name | Why it may apply | Confidence |
-|---|---|---|---|
-| T1059.001 | PowerShell | PowerShell process execution was observed | Observed behavior; intent unconfirmed |
-| T1071.001 | Web Protocols | Repeated HTTP POST traffic was observed | Possible; C2 purpose unconfirmed |
-| T1105 | Ingress Tool Transfer | A ZIP URL request was observed before the process event | Possible; successful download/execution not confirmed |
-| T1204.002 | Malicious File | A document-related process chain was observed | Hypothesis only; user execution of a malicious file not confirmed |
+This request occurred at 09:14:22, approximately 78 seconds before the PowerShell event.
 
-Do not present the tentative mappings as confirmed attacker techniques. Reassess them if additional endpoint, file, or network evidence becomes available.
+Following the PowerShell event, repeated HTTP POST requests were recorded to:
 
-## L1 conclusion and escalation
+`http://update-check.example/beacon`
 
-**Disposition:** Suspicious activity — escalate to L2 for validation.
+The requests occurred between 09:16:00 and 09:35:00. Splunk's `delta` command showed a consistent 60-second interval between consecutive requests.
 
-The evidence shows an unusual Office-to-PowerShell process relationship, a preceding ZIP request, and repeated outbound HTTP POST requests at exact 60-second intervals. These findings warrant further investigation.
+The regular communication pattern is consistent with automated beaconing and warrants further investigation.
 
-### Recommended next steps for L2
+However, the available evidence does not independently prove malware infection, successful ZIP execution, or confirmed command-and-control communication.
 
-- Retrieve the full process tree and original command-line telemetry.
-- Identify the downloaded ZIP file on disk and calculate its SHA-256 hash.
-- Check the file, domain, and IP reputation using approved threat-intelligence sources.
-- Review DNS, firewall, proxy, and endpoint telemetry for related activity.
-- Check for persistence, additional child processes, and lateral movement.
-- Determine whether any sensitive data was accessed or transferred.
-- Contain the host or block indicators only under the organization's incident-response policy.
+**L1 conclusion:** Suspicious activity requiring escalation to the L2 security team.
 
-### L1 handling boundary
+## 6. Investigation Timeline
 
-The L1 analyst collects evidence, records timestamps and indicators, assesses alert context, and escalates. Do not claim to have reverse-engineered malware, confirmed exfiltration, or contained the host unless those actions were actually performed and authorized.
+| Time | Activity |
+|---|---|
+| 09:14:22 | GET request for `Invoice_8821.zip` |
+| 09:15:40 | Microsoft Word launched PowerShell |
+| 09:16:00 | First POST request to beacon endpoint |
+| 09:17:00 | Second POST request |
+| 09:18:00 | Third POST request |
+| 09:19:00–09:35:00 | Repeated POST requests at 60-second intervals |
 
-## Skills demonstrated
+## 7. Investigation Process
 
-- Splunk Search Processing Language (SPL)
-- Endpoint process investigation
-- Parent-child process analysis
-- Basic Base64 command interpretation
-- Proxy log analysis
-- Event timeline correlation
-- Beaconing pattern identification using `delta`
+### Phase 1 – Process Identification
+
+The endpoint logs were searched for PowerShell processes launched by Microsoft Word.
+
+Identified process relationship:
+
+- Parent process: `winword.exe`
+- Child process: `powershell.exe`
+- User: `ravi.k`
+- Time: 09:15:40
+
+Microsoft Word launching PowerShell is unusual in many normal office workflows and requires investigation.
+
+### Phase 2 – Encoded PowerShell Command
+
+The raw endpoint event contained the PowerShell flags:
+
+- `-nop` – prevents PowerShell from loading its profile.
+- `-w hidden` – requests a hidden PowerShell window.
+- `-enc` – indicates an encoded command.
+
+The Base64 command was decoded using UTF-16LE encoding.
+
+Decoded command:
+
+```powershell
+Write-Output 'lab-stage1-beacon'
+```
+
+This command writes a text string to the PowerShell output stream. It does not, by itself, prove that malware was downloaded or executed.
+
+### Phase 3 – Proxy Investigation
+
+The proxy logs were reviewed around the PowerShell event.
+
+At 09:14:22, the following request was recorded:
+
+`http://invoice-portal-secure.example/Invoice_8821.zip`
+
+The request was categorized as `Newly Registered Domain`.
+
+The request occurred approximately 78 seconds before the PowerShell execution.
+
+The proxy record does not independently confirm that the ZIP file was successfully downloaded, opened or executed.
+
+### Phase 4 – Network Activity Investigation
+
+After the PowerShell event, repeated HTTP POST requests were observed.
+
+Destination:
+
+`http://update-check.example/beacon`
+
+Observed characteristics:
+
+- HTTP method: POST
+- Source IP: `10.10.3.17`
+- User: `ravi.k`
+- Recorded `bytes_out`: 312
+- Category: Uncategorized
+- First observed request: 09:16:00
+- Last observed request: 09:35:00
+
+### Phase 5 – Beaconing Analysis
+
+Splunk's `delta` command was used to calculate the time difference between consecutive requests.
+
+The result showed a consistent interval of 60 seconds.
+
+This behavior is consistent with periodic beaconing, which may be associated with command-and-control communication.
+
+However, periodic communication can also occur in legitimate applications. Further investigation is required before confirming C2 activity.
+
+## 8. MITRE ATT&CK Mapping
+
+| Technique ID | Technique | Investigation relevance |
+|---|---|---|
+| T1059.001 | PowerShell | PowerShell execution was observed. |
+| T1071.001 | Web Protocols | Repeated HTTP POST communication was observed. |
+| T1105 | Ingress Tool Transfer | A ZIP URL request was observed before the process event; actual transfer and execution are unconfirmed. |
+| T1204.002 | Malicious File | Possible document-related execution scenario; user execution is not confirmed. |
+
+These are behavior mappings and investigation hypotheses, not confirmation that every technique was successfully used by an attacker.
+
+## 9. L1 Analyst Findings
+
+The investigation identified the following suspicious indicators:
+
+1. Microsoft Word launched PowerShell.
+2. PowerShell used hidden-window and encoded-command options.
+3. A ZIP URL was accessed shortly before PowerShell execution.
+4. Repeated HTTP POST requests were sent to an uncategorized domain.
+5. The POST requests occurred at regular 60-second intervals.
+
+These indicators justify escalation for further investigation.
+
+## 10. Recommended L2 Actions
+
+- Verify whether the ZIP file exists on the endpoint.
+- Collect the ZIP file's SHA-256 hash.
+- Review the complete endpoint process tree.
+- Identify which process generated the repeated POST requests.
+- Investigate the destination domain using approved threat-intelligence sources.
+- Review DNS, firewall and endpoint network telemetry.
+- Check for suspicious persistence mechanisms and additional processes.
+- Follow the organization's incident-response procedure for containment decisions.
+
+L1 should not independently isolate the endpoint or block the destination unless authorized by organizational policy.
+
+## 11. Investigation Limitations
+
+- The ZIP file hash was not available in the supplied evidence.
+- The proxy request does not prove successful file execution.
+- The decoded PowerShell command only writes a string.
+- Repeated POST requests do not independently prove C2.
+- No confirmed data exfiltration was established.
+- The host value differs between the initial extracted-field result and the raw event. It must be verified before publishing a single host as definitive.
+
+## 12. Screenshot Evidence
+
+The screenshots below document the Splunk searches and findings.
+
+### 01 – Process Identification
+
+![Process Identification](screenshots/01_process_identification.png)
+
+### 02 – Raw Event and Encoded Command
+
+![Raw Event](screenshots/02_raw_event_encoded_command.png)
+
+### 03 – Proxy Activity Timeline
+
+![Proxy Timeline](screenshots/03_proxy_user_timeline.png)
+
+### 04 – ZIP Request
+
+![ZIP Request](screenshots/04_proxy_download_event.png)
+
+### 05 – Repeated Network Activity
+
+![Network Activity](screenshots/05_beacon_network_activity.png)
+
+### 06 – Beacon Interval Analysis
+
+![Beacon Analysis](screenshots/06_beacon_interval_delta.png)
+
+## 13. Skills Demonstrated
+
+- Splunk Enterprise
+- Basic SPL queries
+- Endpoint log analysis
+- Process relationship investigation
+- PowerShell command-line analysis
+- Base64 decoding
+- Proxy log investigation
+- Event correlation and timeline creation
+- Basic beaconing detection
 - MITRE ATT&CK mapping
-- L1 incident documentation and escalation
+- Incident documentation
+- SOC L1 escalation procedures
 
-## Data and privacy
+## 14. Final Conclusion
 
-Use only authorized lab data. Before publishing screenshots or logs, remove real usernames, hostnames, IP addresses, email addresses, tokens, and other sensitive information. The `.example` domains and private IP in this write-up are lab indicators.
+This project demonstrates a basic SOC L1 investigation workflow using Splunk.
+
+The investigation identified suspicious Office-to-PowerShell execution, a nearby ZIP URL request, and repeated HTTP POST requests at regular 60-second intervals.
+
+The evidence was documented and mapped to relevant MITRE ATT&CK techniques. Due to the limitations of the available logs, the activity was classified as suspicious and recommended for L2 validation rather than declared a confirmed malware infection.
+
+**Project outcome:** L1 investigation completed; L2 escalation recommended.
