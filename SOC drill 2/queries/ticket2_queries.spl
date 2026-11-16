@@ -1,0 +1,109 @@
+# Ticket 2 – Splunk SPL Queries
+# Project: Suspicious PowerShell Launched by Microsoft Word
+# Index: main
+# Dataset date: 24 October 2026
+#
+# Run each query separately in Splunk.
+# These are the searches used or supporting searches for this investigation.
+
+# --------------------------------------------------
+# QUERY 1 – PROCESS IDENTIFICATION
+# Purpose: Identify Microsoft Word launching PowerShell.
+# Screenshot: 01_process_identification.png
+# --------------------------------------------------
+
+index=main parent_image="*winword.exe*" image="*powershell.exe*"
+| table _time host user parent_image image process_command_line
+| sort _time
+
+
+# --------------------------------------------------
+# QUERY 2 – RAW EVENT AND ENCODED COMMAND
+# Purpose: Retrieve the full raw endpoint event.
+# Screenshot: 02_raw_event_encoded_command.png
+# --------------------------------------------------
+
+index=main parent_image="*winword.exe*" image="*powershell.exe*"
+| table _time host user _raw
+
+
+# --------------------------------------------------
+# QUERY 3 – PROXY ACTIVITY FOR THE USER
+# Purpose: Review proxy activity for ravi.k.
+# Supporting search.
+# --------------------------------------------------
+
+index=main user="ravi.k"
+| table _time user src_ip method url bytes_out category
+| sort _time
+
+
+# --------------------------------------------------
+# QUERY 4 – PROXY ACTIVITY AROUND THE ALERT
+# Purpose: Review events between 09:00 and 09:20.
+# Screenshot: 03_proxy_user_timeline.png
+# --------------------------------------------------
+
+index=main user="ravi.k"
+| where _time >= strptime("2026-10-24 09:00:00","%Y-%m-%d %H:%M:%S")
+    AND _time <= strptime("2026-10-24 09:20:00","%Y-%m-%d %H:%M:%S")
+| table _time user src_ip method url bytes_out category
+| sort _time
+
+
+# --------------------------------------------------
+# QUERY 5 – IDENTIFY THE ZIP REQUEST
+# Purpose: Find the Invoice_8821.zip request.
+# Screenshot: 04_proxy_download_event.png
+# --------------------------------------------------
+
+index=main user="ravi.k" "Invoice_8821.zip"
+| table _time user src_ip method url bytes_out category
+| sort _time
+
+
+# --------------------------------------------------
+# QUERY 6 – NETWORK ACTIVITY
+# Purpose: Identify repeated requests to the beacon URL.
+# Screenshot: 05_beacon_network_activity.png
+# --------------------------------------------------
+
+index=main user="ravi.k" "update-check.example"
+| table _time user src_ip method url bytes_out category
+| sort _time
+
+
+# --------------------------------------------------
+# QUERY 7 – BEACON INTERVAL ANALYSIS
+# Purpose: Calculate the interval between requests.
+# Screenshot: 06_beacon_interval_delta.png
+# --------------------------------------------------
+
+index=main user="ravi.k" "update-check.example"
+| sort 0 _time
+| delta _time as interval_seconds
+| table _time url interval_seconds
+
+
+# --------------------------------------------------
+# QUERY 8 – OPTIONAL URL SUMMARY
+# Purpose: Count requests and display recorded byte values.
+# Supporting analysis; not required for the main conclusion.
+# --------------------------------------------------
+
+index=main user="ravi.k"
+| stats count values(bytes_out) as recorded_bytes by url
+| sort - count
+
+
+# --------------------------------------------------
+# OPTIONAL ALTERNATIVE – STREAMSTATS INTERVAL ANALYSIS
+# Purpose: Calculate intervals using streamstats instead of delta.
+# Use this as an alternative to Query 7, not a separate finding.
+# --------------------------------------------------
+
+index=main user="ravi.k" "update-check.example"
+| sort 0 _time
+| streamstats current=f last(_time) as previous_time by url
+| eval interval_seconds=_time-previous_time
+| table _time url interval_seconds
